@@ -1,11 +1,12 @@
 // api/proxy.js
 export const config = {
     api: {
-        bodyParser: false, // Disabling automatic body parsing to allow raw binary stream pass-through
+        bodyParser: false, // Mematikan parser bawaan agar data binary file gambar diteruskan secara mentah
     },
 };
 
 export default async function handler(req, res) {
+    // Pengaturan Header CORS agar frontend dapat mengakses endpoint ini
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -28,22 +29,29 @@ export default async function handler(req, res) {
             headers['Content-Type'] = req.headers['content-type'];
         }
 
-        // Forward the raw unparsed request stream directly to the external destination
-        const response = await fetch(targetUrl, {
+        // Konfigurasi pengambilan data untuk Vercel Serverless v18+
+        const fetchOptions = {
             method: req.method,
             headers: headers,
-            body: req.method === 'POST' ? req : undefined
-        });
+        };
 
-        let data;
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-            data = await response.json();
-        } else {
-            data = await response.text();
+        // Jika metode POST, kirimkan stream body dan tambahkan duplex: 'half'
+        if (req.method === 'POST') {
+            fetchOptions.body = req;
+            fetchOptions.duplex = 'half'; // <--- PERBAIKAN UTAMA: Wajib ada untuk streaming body di Node.js terbaru
         }
 
-        return res.status(response.status).json(data);
+        const discordResponse = await fetch(targetUrl, fetchOptions);
+        
+        let data;
+        const contentType = discordResponse.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            data = await discordResponse.json();
+        } else {
+            data = await discordResponse.text();
+        }
+
+        return res.status(discordResponse.status).json(data);
     } catch (error) {
         return res.status(500).json({ error: `Proxy routing failure: ${error.message}` });
     }
