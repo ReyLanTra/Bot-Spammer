@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bot Integration Dashboard - By ReyLan</title>
+    <link rel="icon" type="image/png" href="https://image.alikhlas.icu/v25X/1000088939.png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+    <button class="theme-toggle-btn" id="theme-button" onclick="toggleTheme()">☀️ Light</button>
+
+    <h2>Discord Bot Management Dashboard</h2>
+    <div class="credit">Created by: ReyLan</div>
+    
+    <!-- Authentication Token Configuration -->
+    <div class="form-group">
+        <label for="bot-token">Bot Authorization Token</label>
+        <input type="password" id="bot-token" placeholder="MTI0NTY3ODM5MTIzNDU2Nzg5...">
+        <button id="load-bot-btn" class="btn-secondary" onclick="loadBotDetails()">Hubungkan Bot</button>
+    </div>
+
+    <!-- Target Selection Context -->
+    <div class="form-row">
+        <div class="form-col">
+            <label for="server-select">Pilih Server Target</label>
+            <select id="server-select" onchange="loadTargetChannels()" disabled>
+                <option value="">-- Pilih Server --</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="form-col">
+            <label>Pilih Channel Target</label>
+            <div class="checkbox-group" id="channels-container">
+                <span class="placeholder-text">Hubungkan bot terlebih dahulu...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Payload Definition -->
+    <div class="form-group">
+        <label for="outside-content">Teks Konten Utama</label>
+        <input type="text" id="outside-content" placeholder="Masukkan pesan teks reguler">
+    </div>
+
+    <div class="form-row">
+        <div class="form-col" style="flex: 3;">
+            <label for="embed-title">Judul Embed (Opsional)</label>
+            <input type="text" id="embed-title" placeholder="Masukkan judul pesan">
+        </div>
+        <div class="form-col" style="flex: 1;">
+            <label for="embed-color">Warna</label>
+            <input type="color" id="embed-color" value="#5865F2">
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="message-content">Deskripsi / Isi Embed</label>
+        <textarea id="message-content" rows="3" placeholder="Masukkan konten teks di dalam kotak embed..."></textarea>
+    </div>
+
+    <div class="form-row">
+        <div class="form-col">
+            <label for="execution-count">Jumlah Pengiriman por Channel</label>
+            <input type="number" id="execution-count" value="1" min="1">
+        </div>
+        <div class="form-col">
+            <label for="delay-time">Jeda Waktu (Milidetik)</label>
+            <input type="number" id="delay-time" value="2000" min="1000">
+        </div>
+    </div>
+
+    <button id="start-btn" class="btn-submit" onclick="executeBroadcasting()" disabled>Mulai Transmisi</button>
+
+    <div id="log-container">
+        <div class="log-info">[Sistem] Dashboard manajemen siap.</div>
+    </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
