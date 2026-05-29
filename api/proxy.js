@@ -1,54 +1,50 @@
 // api/proxy.js
+export const config = {
+    api: {
+        bodyParser: false, // Disabling automatic body parsing to allow raw binary stream pass-through
+    },
+};
+
 export default async function handler(req, res) {
-    // Mengizinkan hak akses CORS agar bisa diakses oleh HTML frontend kamu
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
 
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return res.status(200).end();
     }
 
-    // Mengambil target URL asli dari query (?url=...)
     const targetUrl = req.query.url;
     if (!targetUrl) {
         return res.status(400).json({ error: 'Missing target URL parameter.' });
     }
 
-    const authHeader = req.headers['authorization'];
-
     try {
-        const fetchOptions = {
+        const headers = {};
+        if (req.headers['authorization']) {
+            headers['Authorization'] = req.headers['authorization'];
+        }
+        if (req.headers['content-type']) {
+            headers['Content-Type'] = req.headers['content-type'];
+        }
+
+        // Forward the raw unparsed request stream directly to the external destination
+        const response = await fetch(targetUrl, {
             method: req.method,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        };
+            headers: headers,
+            body: req.method === 'POST' ? req : undefined
+        });
 
-        // Teruskan token bot jika ada
-        if (authHeader) {
-            fetchOptions.headers['Authorization'] = authHeader;
-        }
-
-        // Jika metodenya POST/PUT, teruskan data body pesan isi spamnya
-        if (req.method === 'POST' || req.method === 'PUT') {
-            fetchOptions.body = JSON.stringify(req.body);
-        }
-
-        const discordResponse = await fetch(targetUrl, fetchOptions);
-        
         let data;
-        const contentType = discordResponse.headers.get('content-type');
+        const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
-            data = await discordResponse.json();
+            data = await response.json();
         } else {
-            data = await discordResponse.text();
+            data = await response.text();
         }
 
-        return res.status(discordResponse.status).json(data);
+        return res.status(response.status).json(data);
     } catch (error) {
-        return res.status(500).json({ error: error.message });
+        return res.status(500).json({ error: `Proxy routing failure: ${error.message}` });
     }
 }
