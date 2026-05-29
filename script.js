@@ -1,6 +1,4 @@
 let isRunning = false;
-
-// Otomatis mendeteksi domain Vercel tempat web kamu di-deploy
 const LOCAL_PROXY = window.location.origin + "/api/proxy?url=";
 const DISCORD_API = "https://discord.com/api/v10";
 
@@ -13,18 +11,6 @@ function logMessage(text, type = 'info') {
     entry.innerText = `[${timestamp}] ${text}`;
     container.appendChild(entry);
     container.scrollTop = container.scrollHeight;
-}
-
-function toggleTheme() {
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    const themeButton = document.getElementById('theme-button');
-    if (currentTheme === 'light') {
-        document.documentElement.removeAttribute('data-theme');
-        themeButton.innerText = "☀️ Light";
-    } else {
-        document.documentElement.setAttribute('data-theme', 'light');
-        themeButton.innerText = "🌙 Dark";
-    }
 }
 
 async function loadBotDetails() {
@@ -115,33 +101,53 @@ async function executeBroadcasting() {
     const contentOutside = document.getElementById('outside-content').value.trim();
     const title = document.getElementById('embed-title').value.trim();
     const description = document.getElementById('message-content').value.trim();
+    const footerText = document.getElementById('embed-footer').value.trim();
     const numericColor = parseInt(document.getElementById('embed-color').value.replace("#", ""), 16);
+
+    const mainImageFile = document.getElementById('image-file').files[0];
+    const thumbnailFile = document.getElementById('thumbnail-file').files[0];
 
     const iterations = parseInt(document.getElementById('execution-count').value) || 1;
     const delay = parseInt(document.getElementById('delay-time').value) || 2000;
 
-    const payload = {
-        content: contentOutside || undefined,
-        embeds: (title || description) ? [{
-            title: title || undefined,
-            description: description || undefined,
-            color: numericColor,
-            timestamp: new Date().toISOString()
-        }] : undefined
-    };
+    logMessage(`Memulai pengiriman terstruktur ke ${channels.length} channel.`, "info");
 
     for (let currentLoop = 1; currentLoop <= iterations; currentLoop++) {
         if (!isRunning) break;
+        
         for (const channelId of channels) {
+            const formData = new FormData();
+            
+            const payloadJson = {
+                content: contentOutside || undefined,
+                embeds: [{
+                    title: title || undefined,
+                    description: description || undefined,
+                    color: numericColor,
+                    footer: footerText ? { text: footerText } : undefined,
+                    timestamp: new Date().toISOString()
+                }]
+            };
+
+            // Process binary files via explicit form-data keys to eliminate base64 inflation issues
+            if (mainImageFile) {
+                formData.append('files[0]', mainImageFile, 'main_image.png');
+                payloadJson.embeds[0].image = { url: 'attachment://main_image.png' };
+            }
+
+            if (thumbnailFile) {
+                formData.append('files[1]', thumbnailFile, 'thumb_image.png');
+                payloadJson.embeds[0].thumbnail = { url: 'attachment://thumb_image.png' };
+            }
+
+            formData.append('payload_json', JSON.stringify(payloadJson));
+
             try {
                 const targetUrl = encodeURIComponent(`${DISCORD_API}/channels/${channelId}/messages`);
                 const response = await fetch(`${LOCAL_PROXY}${targetUrl}`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bot ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: payload // Kirim langsung objek mentahnya
+                    headers: { 'Authorization': `Bot ${token}` },
+                    body: formData
                 });
 
                 if (response.ok) {
@@ -152,10 +158,11 @@ async function executeBroadcasting() {
                     logMessage(`[Rate Limit] Menunda ${waitTime}ms`, "warn");
                     await new Promise(res => setTimeout(res, waitTime));
                 } else {
-                    logMessage(`Gagal ke ${channelId}. Status: ${response.status}`, "error");
+                    const errorText = await response.text();
+                    logMessage(`Gagal ke ${channelId}. Status: ${response.status}. Detail: ${errorText}`, "error");
                 }
             } catch (error) {
-                logMessage(`Error Jaringan pada ${channelId}`, "error");
+                logMessage(`Error Jaringan pada ${channelId}: ${error.message}`, "error");
             }
         }
         if (currentLoop < iterations) await new Promise(res => setTimeout(res, delay));
@@ -164,5 +171,5 @@ async function executeBroadcasting() {
     isRunning = false;
     button.disabled = false;
     button.innerText = "Mulai Transmisi";
-    logMessage("Rangkaian proses selesai.", "info");
+    logMessage("Proses pengiriman selesai.", "info");
 }
