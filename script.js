@@ -1,7 +1,7 @@
 let isRunning = false;
 
 // Menggunakan CORS Proxy publik yang stabil untuk menembus proteksi browser lokal
-const PROXY_URL = "https://api.allorigins.win/raw?url=";
+const PROXY_URL = "";
 const DISCORD_API = "https://discord.com/api/v10";
 
 function logMessage(text, type = 'info') {
