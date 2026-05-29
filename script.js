@@ -1,7 +1,7 @@
 let isRunning = false;
 
-// Menggunakan CORS Proxy publik yang stabil untuk menembus proteksi browser lokal
-const PROXY_URL = "";
+// Menggunakan proxy alternatif AllOrigins yang tidak memerlukan aktivasi klik demo
+const PROXY_URL = "https://api.allorigins.win/raw?url=";
 const DISCORD_API = "https://discord.com/api/v10";
 
 function logMessage(text, type = 'info') {
@@ -17,7 +17,6 @@ function logMessage(text, type = 'info') {
     container.scrollTop = container.scrollHeight;
 }
 
-// Fitur Pengubah Tema yang dipindahkan dari HTML agar tidak error
 function toggleTheme() {
     const currentTheme = document.documentElement.getAttribute('data-theme');
     const themeButton = document.getElementById('theme-button');
@@ -33,26 +32,21 @@ function toggleTheme() {
     }
 }
 
-// Mengambil daftar Server (Guilds) melalui Proxy
 async function loadBotDetails() {
     const token = document.getElementById('bot-token').value.trim();
     if (!token) return logMessage("Token bot tidak boleh kosong.", "error");
 
-    logMessage("Menghubungkan ke API Discord via Proxy...", "info");
+    logMessage("Menghubungkan ke API Discord via AllOrigins Proxy...", "info");
     
     try {
-        // Menembak API lewat gabungan URL Proxy + API Discord
-        const response = await fetch(`${PROXY_URL}${DISCORD_API}/users/@me/guilds`, {
+        // Menggabungkan URL dengan encodeURIComponent agar aman dilewatkan ke parameter proxy
+        const targetUrl = encodeURIComponent(`${DISCORD_API}/users/@me/guilds`);
+        const response = await fetch(`${PROXY_URL}${targetUrl}`, {
             method: 'GET',
             headers: { 
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bot ${token}`
             }
         });
-
-        if (response.status === 403) {
-            throw new Error("Akses Proxy diblokir. Harap aktifkan izin sementara pada cors-anywhere.");
-        }
 
         if (!response.ok) {
             const errData = await response.text();
@@ -75,13 +69,9 @@ async function loadBotDetails() {
         logMessage(`Berhasil terhubung! Bot mendeteksi ${guilds.length} Server.`, "success");
     } catch (err) {
         logMessage(`Gagal memuat detail bot: ${err.message}`, "error");
-        if (err.message.includes("fetch")) {
-            logMessage("Tips: Jika pertama kali, buka https://cors-anywhere.herokuapp.com/corsdemo di browser lalu klik tombol aktifkan.", "warn");
-        }
     }
 }
 
-// Mengambil daftar Channel melalui Proxy
 async function loadTargetChannels() {
     const token = document.getElementById('bot-token').value.trim();
     const guildId = document.getElementById('server-select').value;
@@ -95,11 +85,11 @@ async function loadTargetChannels() {
     container.innerHTML = '<span class="placeholder-text">Memuat daftar channel...</span>';
 
     try {
-        const response = await fetch(`${PROXY_URL}${DISCORD_API}/guilds/${guildId}/channels`, {
+        const targetUrl = encodeURIComponent(`${DISCORD_API}/guilds/${guildId}/channels`);
+        const response = await fetch(`${PROXY_URL}${targetUrl}`, {
             method: 'GET',
             headers: { 
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bot ${token}`
             }
         });
 
@@ -108,7 +98,6 @@ async function loadTargetChannels() {
         const channels = await response.json();
         container.innerHTML = '';
         
-        // Filter text channel (Type 0)
         const textChannels = channels.filter(c => c.type === 0);
 
         if (textChannels.length === 0) {
@@ -132,7 +121,6 @@ async function loadTargetChannels() {
     }
 }
 
-// Menjalankan misi transmisi pesan massal ke channel terpilih
 async function executeBroadcasting() {
     if (isRunning) return;
 
@@ -179,7 +167,8 @@ async function executeBroadcasting() {
 
         for (const channelId of channels) {
             try {
-                const response = await fetch(`${PROXY_URL}${DISCORD_API}/channels/${channelId}/messages`, {
+                const targetUrl = encodeURIComponent(`${DISCORD_API}/channels/${channelId}/messages`);
+                const response = await fetch(`${PROXY_URL}${targetUrl}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bot ${token}`,
