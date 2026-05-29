@@ -1,29 +1,41 @@
 let isRunning = false;
 
+// Fungsi menampilkan log ke komponen konsol UI
 function logMessage(text, type = 'info') {
     const container = document.getElementById('log-container');
     const entry = document.createElement('div');
     entry.className = `log-entry log-${type}`;
+    
     const timestamp = new Date().toLocaleTimeString();
     entry.innerText = `[${timestamp}] ${text}`;
+    
     container.appendChild(entry);
     container.scrollTop = container.scrollHeight;
 }
 
-// Fetches available server structures via backend implementation
+// Mengambil daftar Server (Guilds) langsung dari API Resmi Discord
 async function loadBotDetails() {
     const token = document.getElementById('bot-token').value.trim();
     if (!token) return logMessage("Token bot tidak boleh kosong.", "error");
 
-    logMessage("Mengautentikasi bot dan mengambil daftar guild...", "info");
+    logMessage("Menghubungkan ke API Discord...", "info");
     
     try {
-        // Implementation references external orchestration proxy to prevent CORS policy obstacles
-        const response = await fetch('/api/guilds', {
-            headers: { 'Authorization': `Bot ${token}` }
+        // Mengambil data langsung ke endpoint resmi Discord v10
+        const response = await fetch('https://discord.com/api/v10/users/@me/guilds', {
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
-        const guilds = await response.json();
 
+        if (!response.ok) {
+            const errData = await response.text();
+            throw new Error(`Sinyal API error (${response.status}): ${errData}`);
+        }
+
+        const guilds = await response.json();
         const select = document.getElementById('server-select');
         select.innerHTML = '<option value="">-- Pilih Server --</option>';
         
@@ -36,13 +48,14 @@ async function loadBotDetails() {
 
         select.disabled = false;
         document.getElementById('start-btn').disabled = false;
-        logMessage("Daftar server berhasil dimuat.", "success");
+        logMessage(`Berhasil terhubung! Bot mendeteksi ${guilds.length} Server.`, "success");
     } catch (err) {
         logMessage(`Gagal memuat detail bot: ${err.message}`, "error");
+        console.error(err);
     }
 }
 
-// Loads channel components belonging to the chosen guild scope
+// Mengambil daftar Channel berdasarkan server yang dipilih langsung dari API Discord
 async function loadTargetChannels() {
     const token = document.getElementById('bot-token').value.trim();
     const guildId = document.getElementById('server-select').value;
@@ -56,15 +69,28 @@ async function loadTargetChannels() {
     container.innerHTML = '<span class="placeholder-text">Memuat daftar channel...</span>';
 
     try {
-        const response = await fetch(`/api/guilds/${guildId}/channels`, {
-            headers: { 'Authorization': `Bot ${token}` }
+        const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
+            method: 'GET',
+            headers: { 
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
-        const channels = await response.json();
 
+        if (!response.ok) throw new Error(`HTTP Error status: ${response.status}`);
+        
+        const channels = await response.json();
         container.innerHTML = '';
         
-        // Filter elements to display only text channels
-        channels.filter(c => c.type === 0).forEach(channel => {
+        // Type 0 adalah Text Channel (Saluran Teks biasa)
+        const textChannels = channels.filter(c => c.type === 0);
+
+        if (textChannels.length === 0) {
+            container.innerHTML = '<span class="placeholder-text error-text">Tidak ada text channel di server ini.</span>';
+            return;
+        }
+        
+        textChannels.forEach(channel => {
             const label = document.createElement('label');
             label.className = 'checkbox-item';
             label.innerHTML = `
@@ -73,12 +99,14 @@ async function loadTargetChannels() {
             `;
             container.appendChild(label);
         });
+        logMessage("Daftar channel berhasil dimuat.", "success");
     } catch (err) {
-        container.innerHTML = '<span class="placeholder-text error-text">Gagal memuat channel.</span>';
+        container.innerHTML = '<span class="placeholder-text error-text">Gagal memuat daftar channel.</span>';
+        logMessage(`Gagal memuat channel: ${err.message}`, "error");
     }
 }
 
-// Executes payload serialization and delivery parameters
+// Mengirimkan pesan biner / text langsung menuju API Discord
 async function executeBroadcasting() {
     if (isRunning) return;
 
@@ -87,7 +115,7 @@ async function executeBroadcasting() {
     const channels = Array.from(channelElements).map(el => el.value);
 
     if (channels.length === 0) {
-        return logMessage("Pilih setidaknya satu channel target.", "warn");
+        return logMessage("Pilih minimal satu channel target!", "warn");
     }
 
     isRunning = true;
@@ -95,27 +123,38 @@ async function executeBroadcasting() {
     button.disabled = true;
     button.innerText = "Transmisi Berjalan...";
 
-    logMessage(`Memulai proses pengiriman ke ${channels.length} channel target...`, "info");
-
-    // Formulate payload values
-    const payload = {
-        content: document.getElementById('outside-content').value.trim(),
-        embed: {
-            title: document.getElementById('embed-title').value.trim(),
-            description: document.getElementById('message-content').value.trim(),
-            color: parseInt(document.getElementById('embed-color').value.replace("#", ""), 16)
-        }
-    };
+    const contentOutside = document.getElementById('outside-content').value.trim();
+    const title = document.getElementById('embed-title').value.trim();
+    const description = document.getElementById('message-content').value.trim();
+    const hexColor = document.getElementById('embed-color').value;
 
     const iterations = parseInt(document.getElementById('execution-count').value) || 1;
     const delay = parseInt(document.getElementById('delay-time').value) || 2000;
+    const numericColor = parseInt(hexColor.replace("#", ""), 16);
+
+    logMessage(`Memulai pengiriman pesan ke ${channels.length} channel target.`, "info");
+
+    // Membuat objek struktur data mentah JSON standar Discord
+    const payload = {
+        content: contentOutside || undefined,
+        embeds: (title || description) ? [{
+            title: title || undefined,
+            description: description || undefined,
+            color: numericColor,
+            timestamp: new Date().toISOString()
+        }] : undefined
+    };
+
+    if (!contentOutside && !title && !description) {
+        payload.content = "Bot automated message transmission triggered.";
+    }
 
     for (let currentLoop = 1; currentLoop <= iterations; currentLoop++) {
         if (!isRunning) break;
 
         for (const channelId of channels) {
             try {
-                const response = await fetch(`/api/channels/${channelId}/messages`, {
+                const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bot ${token}`,
@@ -125,14 +164,17 @@ async function executeBroadcasting() {
                 });
 
                 if (response.ok) {
-                    logMessage(`[Siklus ${currentLoop}] Berhasil terkirim ke channel ID: ${channelId}`, "success");
+                    logMessage(`[Siklus ${currentLoop}] Terkirim -> Channel ID: ${channelId}`, "success");
                 } else if (response.status === 429) {
-                    logMessage(`[Rate Limit] Batasan terdeteksi pada channel ${channelId}. Menunda operasi.`, "warn");
+                    const rateLimit = await response.json();
+                    const waitTime = (rateLimit.retry_after || 1) * 1000;
+                    logMessage(`[Rate Limit] Terdeteksi! Menunda ${waitTime}ms pada channel ${channelId}`, "warn");
+                    await new Promise(res => setTimeout(res, waitTime));
                 } else {
-                    logMessage(`Gagal mengirim ke ${channelId}. Status: ${response.status}`, "error");
+                    logMessage(`Gagal kirim ke ${channelId}. Kode Status: ${response.status}`, "error");
                 }
             } catch (error) {
-                logMessage(`Kesalahan jaringan pada channel ${channelId}`, "error");
+                logMessage(`Kesalahan Jaringan pada channel ${channelId}: ${error.message}`, "error");
             }
         }
         
@@ -144,5 +186,5 @@ async function executeBroadcasting() {
     isRunning = false;
     button.disabled = false;
     button.innerText = "Mulai Transmisi";
-    logMessage("Proses selesai.", "info");
-            }
+    logMessage("Seluruh rangkaian proses selesai.", "info");
+}
