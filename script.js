@@ -1,6 +1,7 @@
 let isRunning = false;
 
-// Tembak langsung tanpa perantara proxy eksternal
+// Otomatis mendeteksi domain Vercel tempat web kamu di-deploy
+const LOCAL_PROXY = window.location.origin + "/api/proxy?url=";
 const DISCORD_API = "https://discord.com/api/v10";
 
 function logMessage(text, type = 'info') {
@@ -30,15 +31,13 @@ async function loadBotDetails() {
     const token = document.getElementById('bot-token').value.trim();
     if (!token) return logMessage("Token bot tidak boleh kosong.", "error");
 
-    logMessage("Menghubungkan langsung ke API Discord...", "info");
+    logMessage("Menghubungkan ke API Discord via Serverless Proxy...", "info");
     
     try {
-        const response = await fetch(`${DISCORD_API}/users/@me/guilds`, {
+        const targetUrl = encodeURIComponent(`${DISCORD_API}/users/@me/guilds`);
+        const response = await fetch(`${LOCAL_PROXY}${targetUrl}`, {
             method: 'GET',
-            headers: { 
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
-            }
+            headers: { 'Authorization': `Bot ${token}` }
         });
 
         if (!response.ok) throw new Error(`Sinyal API error (${response.status})`);
@@ -56,7 +55,7 @@ async function loadBotDetails() {
 
         select.disabled = false;
         document.getElementById('start-btn').disabled = false;
-        logMessage(`Berhasil! Bot mendeteksi ${guilds.length} Server.`, "success");
+        logMessage(`Berhasil terhubung! Mendeteksi ${guilds.length} Server.`, "success");
     } catch (err) {
         logMessage(`Gagal memuat detail bot: ${err.message}`, "error");
     }
@@ -71,7 +70,8 @@ async function loadTargetChannels() {
     container.innerHTML = '<span class="placeholder-text">Memuat daftar channel...</span>';
 
     try {
-        const response = await fetch(`${DISCORD_API}/guilds/${guildId}/channels`, {
+        const targetUrl = encodeURIComponent(`${DISCORD_API}/guilds/${guildId}/channels`);
+        const response = await fetch(`${LOCAL_PROXY}${targetUrl}`, {
             method: 'GET',
             headers: { 'Authorization': `Bot ${token}` }
         });
@@ -105,7 +105,7 @@ async function executeBroadcasting() {
     const channelElements = document.querySelectorAll('input[name="target-channels"]:checked');
     const channels = Array.from(channelElements).map(el => el.value);
 
-    if (channels.length === 0) return logMessage("Pilih minimal satu channel!", "warn");
+    if (channels.length === 0) return logMessage("Pilih minimal satu channel target!", "warn");
 
     isRunning = true;
     const button = document.getElementById('start-btn');
@@ -134,13 +134,14 @@ async function executeBroadcasting() {
         if (!isRunning) break;
         for (const channelId of channels) {
             try {
-                const response = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+                const targetUrl = encodeURIComponent(`${DISCORD_API}/channels/${channelId}/messages`);
+                const response = await fetch(`${LOCAL_PROXY}${targetUrl}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bot ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload)
+                    body: payload // Kirim langsung objek mentahnya
                 });
 
                 if (response.ok) {
@@ -148,6 +149,7 @@ async function executeBroadcasting() {
                 } else if (response.status === 429) {
                     const rateLimit = await response.json();
                     const waitTime = (rateLimit.retry_after || 1) * 1000;
+                    logMessage(`[Rate Limit] Menunda ${waitTime}ms`, "warn");
                     await new Promise(res => setTimeout(res, waitTime));
                 } else {
                     logMessage(`Gagal ke ${channelId}. Status: ${response.status}`, "error");
@@ -162,5 +164,5 @@ async function executeBroadcasting() {
     isRunning = false;
     button.disabled = false;
     button.innerText = "Mulai Transmisi";
-    logMessage("Proses selesai.", "info");
+    logMessage("Rangkaian proses selesai.", "info");
 }
