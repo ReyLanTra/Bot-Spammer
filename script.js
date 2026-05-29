@@ -1,7 +1,10 @@
 let isRunning = false;
+
+// Otomatis mendeteksi domain Vercel tempat web kamu di-deploy
 const LOCAL_PROXY = window.location.origin + "/api/proxy?url=";
 const DISCORD_API = "https://discord.com/api/v10";
 
+// Fungsi menampilkan log ke komponen konsol UI
 function logMessage(text, type = 'info') {
     const container = document.getElementById('log-container');
     if (!container) return;
@@ -13,6 +16,22 @@ function logMessage(text, type = 'info') {
     container.scrollTop = container.scrollHeight;
 }
 
+// KEMBALIKAN: Fitur Pengubah Tema Dark / Light Mode
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const themeButton = document.getElementById('theme-button');
+    if (currentTheme === 'light') {
+        document.documentElement.removeAttribute('data-theme');
+        themeButton.innerText = "☀️ Light";
+        logMessage("Tema dialihkan ke Dark Mode.", "info");
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeButton.innerText = "🌙 Dark";
+        logMessage("Tema dialihkan ke Light Mode.", "info");
+    }
+}
+
+// Mengambil daftar Server (Guilds) via Vercel Proxy
 async function loadBotDetails() {
     const token = document.getElementById('bot-token').value.trim();
     if (!token) return logMessage("Token bot tidak boleh kosong.", "error");
@@ -47,6 +66,7 @@ async function loadBotDetails() {
     }
 }
 
+// Mengambil daftar Channel via Vercel Proxy
 async function loadTargetChannels() {
     const token = document.getElementById('bot-token').value.trim();
     const guildId = document.getElementById('server-select').value;
@@ -85,6 +105,7 @@ async function loadTargetChannels() {
     }
 }
 
+// Eksekusi transmisi paket data terstruktur (Teks, Embed, Footer, Gambar)
 async function executeBroadcasting() {
     if (isRunning) return;
     const token = document.getElementById('bot-token').value.trim();
@@ -129,7 +150,7 @@ async function executeBroadcasting() {
                 }]
             };
 
-            // Process binary files via explicit form-data keys to eliminate base64 inflation issues
+            // Menyematkan berkas biner asli ke dalam FormData penampung
             if (mainImageFile) {
                 formData.append('files[0]', mainImageFile, 'main_image.png');
                 payloadJson.embeds[0].image = { url: 'attachment://main_image.png' };
