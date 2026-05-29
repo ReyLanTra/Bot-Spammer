@@ -1,8 +1,12 @@
 let isRunning = false;
 
-// Fungsi menampilkan log ke komponen konsol UI
+// Menggunakan CORS Proxy publik yang stabil untuk menembus proteksi browser lokal
+const PROXY_URL = "https://cors-anywhere.herokuapp.com/";
+const DISCORD_API = "https://discord.com/api/v10";
+
 function logMessage(text, type = 'info') {
     const container = document.getElementById('log-container');
+    if (!container) return;
     const entry = document.createElement('div');
     entry.className = `log-entry log-${type}`;
     
@@ -13,22 +17,42 @@ function logMessage(text, type = 'info') {
     container.scrollTop = container.scrollHeight;
 }
 
-// Mengambil daftar Server (Guilds) langsung dari API Resmi Discord
+// Fitur Pengubah Tema yang dipindahkan dari HTML agar tidak error
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const themeButton = document.getElementById('theme-button');
+    
+    if (currentTheme === 'light') {
+        document.documentElement.removeAttribute('data-theme');
+        themeButton.innerText = "☀️ Light";
+        logMessage("Tema dialihkan ke Dark Mode.", "info");
+    } else {
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeButton.innerText = "🌙 Dark";
+        logMessage("Tema dialihkan ke Light Mode.", "info");
+    }
+}
+
+// Mengambil daftar Server (Guilds) melalui Proxy
 async function loadBotDetails() {
     const token = document.getElementById('bot-token').value.trim();
     if (!token) return logMessage("Token bot tidak boleh kosong.", "error");
 
-    logMessage("Menghubungkan ke API Discord...", "info");
+    logMessage("Menghubungkan ke API Discord via Proxy...", "info");
     
     try {
-        // Mengambil data langsung ke endpoint resmi Discord v10
-        const response = await fetch('https://discord.com/api/v10/users/@me/guilds', {
+        // Menembak API lewat gabungan URL Proxy + API Discord
+        const response = await fetch(`${PROXY_URL}${DISCORD_API}/users/@me/guilds`, {
             method: 'GET',
             headers: { 
                 'Authorization': `Bot ${token}`,
                 'Content-Type': 'application/json'
             }
         });
+
+        if (response.status === 403) {
+            throw new Error("Akses Proxy diblokir. Harap aktifkan izin sementara pada cors-anywhere.");
+        }
 
         if (!response.ok) {
             const errData = await response.text();
@@ -51,11 +75,13 @@ async function loadBotDetails() {
         logMessage(`Berhasil terhubung! Bot mendeteksi ${guilds.length} Server.`, "success");
     } catch (err) {
         logMessage(`Gagal memuat detail bot: ${err.message}`, "error");
-        console.error(err);
+        if (err.message.includes("fetch")) {
+            logMessage("Tips: Jika pertama kali, buka https://cors-anywhere.herokuapp.com/corsdemo di browser lalu klik tombol aktifkan.", "warn");
+        }
     }
 }
 
-// Mengambil daftar Channel berdasarkan server yang dipilih langsung dari API Discord
+// Mengambil daftar Channel melalui Proxy
 async function loadTargetChannels() {
     const token = document.getElementById('bot-token').value.trim();
     const guildId = document.getElementById('server-select').value;
@@ -69,7 +95,7 @@ async function loadTargetChannels() {
     container.innerHTML = '<span class="placeholder-text">Memuat daftar channel...</span>';
 
     try {
-        const response = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
+        const response = await fetch(`${PROXY_URL}${DISCORD_API}/guilds/${guildId}/channels`, {
             method: 'GET',
             headers: { 
                 'Authorization': `Bot ${token}`,
@@ -82,7 +108,7 @@ async function loadTargetChannels() {
         const channels = await response.json();
         container.innerHTML = '';
         
-        // Type 0 adalah Text Channel (Saluran Teks biasa)
+        // Filter text channel (Type 0)
         const textChannels = channels.filter(c => c.type === 0);
 
         if (textChannels.length === 0) {
@@ -106,7 +132,7 @@ async function loadTargetChannels() {
     }
 }
 
-// Mengirimkan pesan biner / text langsung menuju API Discord
+// Menjalankan misi transmisi pesan massal ke channel terpilih
 async function executeBroadcasting() {
     if (isRunning) return;
 
@@ -132,9 +158,8 @@ async function executeBroadcasting() {
     const delay = parseInt(document.getElementById('delay-time').value) || 2000;
     const numericColor = parseInt(hexColor.replace("#", ""), 16);
 
-    logMessage(`Memulai pengiriman pesan ke ${channels.length} channel target.`, "info");
+    logMessage(`Memulai transmisi ke ${channels.length} channel target.`, "info");
 
-    // Membuat objek struktur data mentah JSON standar Discord
     const payload = {
         content: contentOutside || undefined,
         embeds: (title || description) ? [{
@@ -146,7 +171,7 @@ async function executeBroadcasting() {
     };
 
     if (!contentOutside && !title && !description) {
-        payload.content = "Bot automated message transmission triggered.";
+        payload.content = "Bot automated transmission active.";
     }
 
     for (let currentLoop = 1; currentLoop <= iterations; currentLoop++) {
@@ -154,7 +179,7 @@ async function executeBroadcasting() {
 
         for (const channelId of channels) {
             try {
-                const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+                const response = await fetch(`${PROXY_URL}${DISCORD_API}/channels/${channelId}/messages`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bot ${token}`,
